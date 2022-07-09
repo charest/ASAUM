@@ -1,0 +1,44 @@
+#ifndef CONFIG_HPP
+#define CONFIG_HPP
+
+#include <limits>
+
+#cmakedefine HAVE_ZLIB
+#cmakedefine HAVE_EXODUS
+#cmakedefine HAVE_PARMETIS
+#cmakedefine HAVE_THREADS
+
+#cmakedefine ENABLE_FP_EXCEPTIONS
+#cmakedefine ENABLE_TRACE
+
+// make production build happy
+#define UNUSED(x) ((void)(x))
+
+namespace prl {
+
+using real_t = double;
+using int_t = int;
+
+using long_t = long long;
+using byte_t = unsigned char;
+
+using int3_t = int_t[3];
+using long3_t = long_t[3];
+
+namespace consts {
+constexpr int failure = -1;
+constexpr int success = 0;
+constexpr auto epsilon = std::numeric_limits<real_t>::epsilon();
+constexpr auto digits = std::numeric_limits<real_t>::digits10;
+
+constexpr auto real_max = std::numeric_limits<real_t>::max();
+constexpr auto real_min = std::numeric_limits<real_t>::lowest();
+
+constexpr auto int_max = std::numeric_limits<int_t>::max();
+constexpr auto int_min = std::numeric_limits<int_t>::lowest();
+
+}
+
+}
+
+#endif // CONFIG_HPP

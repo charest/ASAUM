@@ -1,0 +1,16 @@
+## Code TODO
+	- Integrators:
+		- Finish RK and LMM IMEX integrators
+			- How do we handle optional mass matrix?
+		- Implement multirate integrators for rad-hydro
+			- Start with trapezoid from MRI-GARK (2.7)
+			- Look at papers on multirate TR-BDF2
+	- Finite elements:
+		- Finish DG discretization
+			- Figure out parallel aspects, assemble sparse matrices, define BCs
+		- Implement CG discretization
+			- Construct element DG matrix, sum overlapping DOFs to get CG
+		- Implement joint DG/CG discretization, i.e., where we construct both simultaneously to save computation
+		- Save mapping to/from DG space and CG space for preconditioning
+	- Implement 2nd moment method
+	- Once discretizations are done, connect Flecsim to hypre for AMG (potentially GMG?)

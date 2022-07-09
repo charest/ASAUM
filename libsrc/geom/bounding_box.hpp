@@ -1,0 +1,33 @@
+#ifndef BOUNDING_BOX_HPP
+#define BOUNDING_BOX_HPP
+
+#include "config.hpp"
+
+namespace prl {
+
+////////////////////////////////////////////////////////////////////////////////
+// Bounding box class
+////////////////////////////////////////////////////////////////////////////////
+struct bounding_box_t {
+  real_t lo[3] = {0., 0., 0.};
+  real_t hi[3] = {0., 0., 0.};
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Bounding box class
+////////////////////////////////////////////////////////////////////////////////
+inline bool bounding_box_contains(
+    const bounding_box_t & bbox,
+    const real_t * x,
+    int_t ndims)
+{
+  for (int_t i=0; i<ndims; ++i) {
+    if (x[i] < bbox.lo[i] || x[i] > bbox.hi[i])
+      return false;
+  }
+  return true;
+}
+
+} // namespace
+
+#endif

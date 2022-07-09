@@ -1,0 +1,40 @@
+#include <cerrno>
+#include <fstream>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+
+namespace prl {
+
+////////////////////////////////////////////////////////////////////////////////
+/// Create a directory
+////////////////////////////////////////////////////////////////////////////////
+int make_dir(const char * name) {
+  auto res = mkdir(name, S_IRWXU);
+  if (res == -1) return errno;
+  else return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Check if a file exists
+////////////////////////////////////////////////////////////////////////////////
+bool file_exists(const char * name)
+{
+  std::ifstream file(name);
+  auto res = file.is_open();
+  return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// move a file from one location to another
+////////////////////////////////////////////////////////////////////////////////
+int move_file(const char * src, const char * dst)
+{
+  std::ifstream in(src, std::ios::in | std::ios::binary);
+  std::ofstream out(dst, std::ios::out | std::ios::binary);
+  out << in.rdbuf();
+  std::remove(src);
+  return !out.good() || !in.good();
+}
+
+} // namespace

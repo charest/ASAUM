@@ -1,0 +1,26 @@
+*.sw[a-zA-Z]
+build/
+*~
+
+# Latex stuff
+*.aux
+*.bbl
+*.blg
+*.dSYM
+*.fls
+*.log
+*.m~
+*.out
+*.synctex*
+*.thm
+*DS_Store
+*bcf
+*latexmk
+*xml
+
+dg_notes.pdf
+gen_ER_plans.pdf
+multigroup-notes.pdf
+new-imex-integrator.pdf
+qd_multigrid.pdf
+grey-trt-imex.pdf

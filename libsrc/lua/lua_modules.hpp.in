@@ -1,0 +1,15 @@
+#ifndef LUA_MODULES_HPP
+#define LUA_MODULES_HPP
+
+#include <map>
+
+namespace prl {
+
+/// store modules we know about
+std::map<std::string, std::string> Modules = {
+  @LUA_DEF@
+};
+
+} // namespace
+
+#endif
