@@ -639,6 +639,99 @@ void mesh_struct_block_t::build_connectivity(int_t a, int_t b)
 
   }
   //----------------------------------------------------------------------------
+  // Cells to vertex
+  //----------------------------------------------------------------------------
+  else if( max==num_dims_ && min== 0 )
+  {
+    
+    auto nx = dims_[0];
+    auto ny = dims_[1];
+    auto nz = dims_[2];
+    
+    const auto & vertices = iterator_.vertices();
+    const auto & cells = iterator_.cells();
+    
+    int num_cells = cells.size();
+    int size_offset=pow(2,num_dims_);
+    std::vector<int_t> cell2verts(size_offset * num_cells);
+
+    //------------------------------------
+    if (num_dims_ == 1) {
+      
+      for (int_t i=0; i<nx; ++i) {
+        cell2verts[ i*2    ] = i;//left
+        cell2verts[ i*2 + 1] = i+1;//right
+      }
+      
+    }
+    //------------------------------------
+    else if (num_dims_ == 2) {
+      
+      for (int_t j=0; j<ny; ++j) {
+        for (int_t i=0; i<nx; ++i) {
+          auto aa = vertices.id(i+0, j+0, 0);
+          auto bb = vertices.id(i+1, j+0, 0);
+          auto cc = vertices.id(i+1, j+1, 0);
+          auto dd = vertices.id(i+0, j+1, 0);
+          auto id = cells.id(i, j, 0);
+
+          cell2verts[ id*4    ] = aa;//bottom-left
+          cell2verts[ id*4 + 1] = bb;//bottom-right
+          cell2verts[ id*4 + 2] = cc;//top-right
+          cell2verts[ id*4 + 3] = dd;//top-left
+      }
+    }
+
+    }
+    //------------------------------------
+    else {
+      for (int_t k=0; k<nz; ++k) {
+        for (int_t j=0; j<ny; ++j) {
+          for (int_t i=0; i<nx; ++i) {
+            auto a = vertices.id(i+0, j+0, k+0);//-x-y-z
+            auto b = vertices.id(i+1, j+0, k+0);//+x-y-z
+            auto c = vertices.id(i+1, j+1, k+0);//+x+y-z
+            auto d = vertices.id(i+0, j+1, k+0);//-x+y-z
+
+            auto e = vertices.id(i+0, j+0, k+1);//-x-y+z
+            auto f = vertices.id(i+1, j+0, k+1);//+x-y-z
+            auto g = vertices.id(i+1, j+1, k+1);//+x+y+z
+            auto h = vertices.id(i+0, j+1, k+1);//-x+y-z
+            auto id = cells.id(i, j, k);
+            cell2verts[ id*8    ] = a;
+            cell2verts[ id*8 + 1] = b;
+            cell2verts[ id*8 + 2] = c;
+            cell2verts[ id*8 + 3] = d;
+            cell2verts[ id*8 + 4] = e;
+            cell2verts[ id*8 + 5] = f;
+            cell2verts[ id*8 + 6] = g;
+            cell2verts[ id*8 + 7] = h;
+          }
+        }
+      }
+    
+    }
+    // now fill in.
+    crs_t<int_t, int_t> conn;
+    auto & indices = conn.indices;
+    auto & offsets = conn.offsets;
+    indices.resize(num_cells);
+    indices.assign( cell2verts.begin(), cell2verts.end());
+    offsets.resize(num_cells+1, 0);
+    
+    for(int i =0;i<num_cells;++i)
+    {
+      offsets[i+1] = offsets[i]+ size_offset;
+    }//i
+    
+    //--- transpose if needed
+    if (a != max)
+      prl::transpose(conn, connectivity_[{a,b}]);
+    else
+      connectivity_[{a,b}] = std::move(conn);
+
+  }
+  //----------------------------------------------------------------------------
   // Unsupported
   //----------------------------------------------------------------------------
   else {
