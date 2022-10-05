@@ -51,7 +51,7 @@ if(HAVE_EXODUS)
   target_include_directories(asaum PUBLIC ${EXODUSII_INCLUDE_DIRS})
   target_link_libraries(asaum PUBLIC ${EXODUSII_LIBRARIES})
 else()
-  set_target_properties(exogen PROPERTIES EXCLUDE_FROM_ALL true)
+#  set_target_properties(exogen PROPERTIES EXCLUDE_FROM_ALL true)
 endif()
 
 find_package(MPI COMPONENTS C CXX)
@@ -99,9 +99,9 @@ option(ENABLE_TRACE "Enable tracing" off)
 
 add_subdirectory(libsrc)
 add_subdirectory(example)
-if (HAVE_EXODUS)
-  add_subdirectory(exogen)
-endif()
+#if (HAVE_EXODUS)
+#  add_subdirectory(exogen)
+#endif()
 
 #------------------------------------------------------------------------------#
 # Add testing
