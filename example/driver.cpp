@@ -205,9 +205,36 @@ void driver_t::initialize() {
 
   auto is_root = comm_.is_root();
   
+  int num_ghost=1;
+  
+  mesh_->request_ghost( num_ghost );
   // configure the mesh for connectivity information / ghost cells
   mesh_->request_face_geometry();
+  mesh_->request_cell_geometry();
+  
+  auto num_dims = mesh_->num_dims();
+  
+  for (int_t i=0; i<mesh_->num_blocks(); ++i) {
+    const auto mesh_block = mesh_->block(i);
+    
+    // structured
+    if (mesh_block->is_structured()) {
+      mesh_block->request_connectivity(num_dims-1, num_dims);
+      mesh_block->request_connectivity(num_dims, num_dims-1);
+      // cell to vertex
+      mesh_block->request_connectivity(0, num_dims);
+      mesh_block->request_connectivity(num_dims, 0);
+    }
+    // unstructured
+    else {
+      mesh_block->request_connectivity(num_dims-1, num_dims);
+      mesh_block->request_connectivity(num_dims, num_dims-1);
+    }
 
+  } // blocks
+
+  
+  
   // create the requested data structures/connectivity/halo
   mesh_->initialize();
 
