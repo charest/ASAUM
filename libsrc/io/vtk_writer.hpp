@@ -8,6 +8,7 @@
 #include "utils/string_utils.hpp"
 
 // system includes
+#include <cstdint>
 #include <sstream>
 #include <type_traits>
 #include <unordered_map>

@@ -3,8 +3,9 @@
 
 #include "config.hpp"
 
-#include <map>
+#include <array>
 #include <list>
+#include <map>
 #include <memory>
 #include <vector>
 
