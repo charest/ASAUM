@@ -4,7 +4,7 @@
 
 driver = {
   -- The case prefix and postfixes
-  output_prefix = "sod-unstruct",
+  output_prefix = "out",
   output_formats = "csv,vtk,exo",
 }
 

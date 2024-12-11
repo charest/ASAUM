@@ -7,7 +7,7 @@ num_cells = {25, 10}
 
 driver = {
   -- The case prefix and postfixes
-  output_prefix = "sod",
+  output_prefix = "out",
   output_formats = "csv,vtk",
 }
 

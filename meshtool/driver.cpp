@@ -426,6 +426,7 @@ void driver_t::output()
       mesh_block->output(*csv_);
       csv_->close();
 
+#if 0
       // hydro
       reset(ss);
       ss << dirname << "/" << output_prefix_ << ".hydro.csv." << block_str;
@@ -433,6 +434,8 @@ void driver_t::output()
       csv_->comment(title.str().c_str());
       //hydro_->block(b)->output(*csv_);
       csv_->close();
+#endif
+
     }
 
   } // csv

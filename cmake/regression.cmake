@@ -53,7 +53,7 @@ endfunction()
 function(create_test)
 
   # the command to run to compare outputs
-  set (TEST_COMMAND "${Python_EXECUTABLE} ${PRL_TOOL_DIR}/numdiff.py --check-text --relative ${PRL_TEST_TOLERANCE} --or --absolute ${PRL_TEST_TOLERANCE}")
+  set (TEST_COMMAND "${Python_EXECUTABLE} ${ASAUM_TOOL_DIR}/numdiff.py --check-text --relative ${ASAUM_TEST_TOLERANCE} --or --absolute ${ASAUM_TEST_TOLERANCE}")
 
   # parse the arguments
   set(options)
@@ -114,7 +114,7 @@ function(create_regression)
 
   # parse the arguments
   set(options)
-  set(oneValueArgs NAME)
+  set(oneValueArgs NAME WORKING_DIRECTORY)
   set(multiValueArgs ARGS PROCS COMPARE STANDARD PARTS)
   cmake_parse_arguments(args "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
   
@@ -141,21 +141,22 @@ function(create_regression)
     create_test(
       NAME ${args_NAME}
       COMMAND
-        $<TARGET_FILE:asaum> -i ${args_INPUT} ${_part_args}
+        $<TARGET_FILE:meshtool> -i ${args_INPUT} ${_part_args}
       COMPARE ${args_COMPARE}
-      STANDARD ${args_STANDARD})
+      STANDARD ${args_STANDARD}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${args_WORKING_DIRECTORY}/p${_procs})
   else()
     foreach(_procs ${args_PROCS})
       create_test(
         NAME ${args_NAME}-p${_procs}
         COMMAND
           ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_procs}
-          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:asaum>
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:meshtool>
           ${_args}
           ${MPIEXEC_POSTFLAGS}
         COMPARE ${args_COMPARE}
         STANDARD ${args_STANDARD}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/p${_procs})
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${args_WORKING_DIRECTORY}/p${_procs})
     endforeach()
   endif()
 
