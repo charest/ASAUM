@@ -1,4 +1,6 @@
-![Sample Image](docs/sample-mesh.png)
+<p align="center">
+    <img src="doc/sample-mesh.png" alt="drawing" width="600"/>
+</p>
 
 # Overview
 ASAUM - *Adaptive Structured and Unstructured Mesh* - is a C++ library for representing distributed, multi-block structed and unstructured meshes.
