@@ -90,35 +90,31 @@ public:
 
   bool has_boundary(int_t i) { return boundary_faces_.count(i); }
 
-  void initialize(
-      bool with_face_geom,
-      bool with_cell_geom,
-      std::vector<std::unique_ptr<mesh_boundary_t>> & boundaries);
-
   void extract_boundaries(std::vector<std::unique_ptr<mesh_boundary_t>> & boundaries);
 
   virtual void extract_boundary(
     int_t boundary_id,
     std::vector<boundary_face_t> & faces) = 0;
 
-  void request_neighbors(int_t dim, int_t through);
-  
-  virtual void build_neighbors(int_t a, int_t  b) = 0;
-  virtual void build_neighbors() = 0;
+  void build_neighbors(const std::vector<std::pair<int_t,int_t>> & conn);
+  virtual void _build_neighbors(const std::vector<std::pair<int_t,int_t>> & conn) = 0;
+  virtual void _build_neighbors(int_t a, int_t  b) = 0;
   
   virtual void pack(int_t id, std::vector<byte_t>& buf, bool as_ghost) const = 0;
   virtual void unpack(const byte_t * & buf, bool as_ghost) = 0;
   
-  void map_ids();
-  void bounding_box();
+  void map_global_to_local_ids();
+  void build_bounding_box();
 
   void queue_geometry_exchange(comm_queue_block_t & q);
 
-  void request_connectivity(int_t a, int_t b);
   void prune_connectivity();
 
-  virtual void build_connectivity() = 0;
-  virtual void build_connectivity(int_t a, int_t  b) = 0;
+  void build_connectivity(const std::vector<std::pair<int_t,int_t>> & conn);
+  virtual void _build_connectivity(const std::vector<std::pair<int_t,int_t>> & conn) = 0;
+  virtual void _build_connectivity(int_t a, int_t  b) = 0;
+  virtual void _build_connectivity_post() {}
+
 
   crs_t<int_t, int_t> & connectivity(int_t a, int_t b);
   const crs_t<int_t, int_t> & connectivity(int_t a, int_t b) const;
@@ -128,9 +124,6 @@ public:
 
   void build_geometry(bool with_face_geom, bool with_cell_geom);
   virtual void _build_geometry(bool with_face_geom, bool with_cell_geom) = 0;
-  
-  virtual void request_face_geometry() = 0;
-  virtual void request_cell_geometry() = 0;
   
   int_t num_all_entities(size_t dim) const
   { return num_all_entities_.at(dim); }
@@ -178,9 +171,6 @@ public:
 
   virtual bool find_cell(const real_t * x, int_t & cell_id) = 0;
   bool find_cell(long_t gid, int_t & cell_id);
-
-  virtual void post_connectivity() {}
-  virtual void finalize() {}
 
   virtual int_t cell_region_id(int_t id) const = 0;
 

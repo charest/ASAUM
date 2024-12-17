@@ -241,14 +241,17 @@ box_mesh_t::box_mesh_t(
   } // blocks
 
   initial_mesh_->compute_neighbors();
-  
+ 
+  build_and_partition();
+
+  number();
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Load the mesh
 ////////////////////////////////////////////////////////////////////////////////
-void box_mesh_t::load()
+void box_mesh_t::build_and_partition()
 {
   auto is_root = comm_.is_root();
   auto comm_size = comm_.size();
@@ -382,9 +385,12 @@ void box_mesh_t::number()
 ////////////////////////////////////////////////////////////////////////////////
 /// Add a halo
 ////////////////////////////////////////////////////////////////////////////////
-void box_mesh_t::build_halo(std::vector<comm_map_block_t> & comm_maps)
+void box_mesh_t::_build_halo(
+    int_t num_ghost,
+    bool with_corners,
+    std::vector<comm_map_block_t> & comm_maps)
 {
-  if (num_ghost_<0) return;
+  if (num_ghost<0) return;
   
   //----------------------------------------------------------------------------
   // Determine cell distribution
@@ -423,8 +429,8 @@ void box_mesh_t::build_halo(std::vector<comm_map_block_t> & comm_maps)
 
     auto this_block = dynamic_cast<mesh_struct_block_t*>(blocks_[b]);
     this_block->build_halo(
-        num_ghost_,
-        with_corners_,
+        num_ghost,
+        with_corners,
         block_offsets_,
         cell_dist,
         shared_info,

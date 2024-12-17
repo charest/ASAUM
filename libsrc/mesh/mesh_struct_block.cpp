@@ -359,17 +359,19 @@ bool mesh_struct_block_t::install_boundary(
 ////////////////////////////////////////////////////////////////////////////////
 /// build neighbors
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_struct_block_t::build_neighbors()
+void mesh_struct_block_t::_build_neighbors(
+  const std::vector<std::pair<int_t, int_t>> & neigh)
 {
-  for (auto & neigh : desired_neighbors_)
-    if (neighbors_.count(neigh) == 0)
-      build_neighbors(neigh.first, neigh.second);
+  for (auto & n : neigh) {
+    if (neighbors_.count(n) == 0)
+      _build_neighbors(n.first, n.second);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// compute neighbors
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_struct_block_t::build_neighbors(int_t dim, int_t thru) 
+void mesh_struct_block_t::_build_neighbors(int_t dim, int_t thru) 
 {
 
   auto & neigh = neighbors_[{dim, thru}];
@@ -561,19 +563,22 @@ void mesh_struct_block_t::build_neighbors(int_t dim, int_t thru)
 ////////////////////////////////////////////////////////////////////////////////
 /// build connecitivy
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_struct_block_t::build_connectivity()
+void mesh_struct_block_t::_build_connectivity(
+  const std::vector<std::pair<int_t, int_t>> & conn)
 {
-  for (auto & conn : desired_connectivity_)
-    if (connectivity_.count(conn) == 0)
-      build_connectivity(conn.first, conn.second);
+  for (auto & c : conn)
+    if (connectivity_.count(c) == 0)
+      _build_connectivity(c.first, c.second);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// compute face neighbors
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_struct_block_t::build_connectivity(int_t a, int_t b) 
+void mesh_struct_block_t::_build_connectivity(int_t a, int_t b) 
 {
+  
+  if (connectivity_.count({a, b})) return;
 
   auto max = std::max(a, b);
   auto min = std::min(a, b);

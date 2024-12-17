@@ -41,14 +41,17 @@ exodus_mesh_t::exodus_mesh_t(
     }
     comm.exit(consts::failure);
   }
- 
+
+  read_and_partition();
+
+  number();
 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Load the mesh
 ////////////////////////////////////////////////////////////////////////////////
-void exodus_mesh_t::load()
+void exodus_mesh_t::read_and_partition()
 {
   // get communicator info
   auto is_root = comm_.is_root();
@@ -185,6 +188,7 @@ void exodus_mesh_t::load()
     root(bid)->set_block(this_block);
     this_block->set_num_vertices();
     this_block->set_num_cells();
+    if (num_dims_>1) this_block->set_num_entities(num_dims_-1);
     this_block->install_boundaries(boundaries_);
   }
 
@@ -554,6 +558,7 @@ void exodus_mesh_t::read(
     part->build_cell_sides();
     part->set_num_vertices();
     part->set_num_cells();
+    if (num_dims_>1) part->set_num_entities(num_dims_-1);
     
     // move the partition
     blocks_.emplace_back( part );
@@ -1022,17 +1027,20 @@ void exodus_mesh_t::number()
 ////////////////////////////////////////////////////////////////////////////////
 /// Add a halo
 ////////////////////////////////////////////////////////////////////////////////
-void exodus_mesh_t::build_halo(std::vector<comm_map_block_t> & comm_maps)
+void exodus_mesh_t::_build_halo(
+    int_t num_ghost,
+    bool with_corners,
+    std::vector<comm_map_block_t> & comm_maps)
 {
     
-  if (num_ghost_<0) return;
+  if (num_ghost<0) return;
   
   //----------------------------------------------------------------------------
   // make the graph
 
   std::vector<size_t> cell_dist;
   crs_t<size_t, int_t> grph;
-  int_t nconn = with_corners_ ? 1 : num_dims_;
+  int_t nconn = with_corners ? 1 : num_dims_;
   
   graph(nconn, cell_dist, grph);
 

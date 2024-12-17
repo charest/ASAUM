@@ -32,15 +32,6 @@ mesh_unstruct_block_t::mesh_unstruct_block_t(int_t num_dims) :
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// The number of cells
-////////////////////////////////////////////////////////////////////////////////
-void mesh_unstruct_block_t::post_connectivity()
-{
-  for (int_t d=1; d<num_dims_; ++d)
-    set_num_entities(d);
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Add a region
 ////////////////////////////////////////////////////////////////////////////////
 void mesh_unstruct_block_t::add_region(int_t id, int_t num)
@@ -993,14 +984,18 @@ void mesh_unstruct_block_t::cell_midpoints(std::vector<real_t> & cx)
 ////////////////////////////////////////////////////////////////////////////////
 /// build connecitivy
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_unstruct_block_t::build_neighbors()
+void mesh_unstruct_block_t::_build_neighbors(const std::vector<std::pair<int_t, int_t>> & neigh)
 {
+  std::set< std::pair<int_t, int_t> > neigh_set(neigh.begin(), neigh.end());
 
   // build whatever neighbor info is requested
   for (int_t dim = num_dims_+1; dim-- > 0;) {
     for (int_t thru=0; thru<=num_dims_; ++thru) {
       if (thru==dim) continue;
-      build_neighbors(dim, thru);
+      
+      auto entry = std::make_pair(dim, thru);
+      if (neigh_set.count(entry))
+        _build_neighbors(dim, thru);
     }
   }
 }
@@ -1009,13 +1004,13 @@ void mesh_unstruct_block_t::build_neighbors()
 ////////////////////////////////////////////////////////////////////////////////
 /// compute neighbors
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_unstruct_block_t::build_neighbors(int_t dim, int_t thru) 
+void mesh_unstruct_block_t::_build_neighbors(int_t dim, int_t thru) 
 {
   auto mx = std::max(dim, thru);
   auto mn = std::min(dim, thru);
 
-  build_connectivity(mx, mn);
-  build_connectivity(mn, mx);
+  _build_connectivity(mx, mn);
+  _build_connectivity(mn, mx);
 
   const auto & conn = connectivity(dim, thru);
   const auto & rconn = connectivity(thru, dim);
@@ -1029,18 +1024,20 @@ void mesh_unstruct_block_t::build_neighbors(int_t dim, int_t thru)
 ////////////////////////////////////////////////////////////////////////////////
 /// build connecitivy
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_unstruct_block_t::build_connectivity()
+void mesh_unstruct_block_t::_build_connectivity(
+  const std::vector<std::pair<int_t, int_t>> & conn)
 {
-  
+
+  std::set< std::pair<int_t, int_t> > conn_set(conn.begin(), conn.end());
+
   // build whatever is requested
   for (int_t from = num_dims_+1; from-- > 0;) {
     for (int_t to=0; to<=num_dims_; ++to) {
       if (to==from) continue;
 
       auto entry = std::make_pair(from, to);
-      if (desired_connectivity_.count(entry))
-        if (connectivity_.count(entry) == 0)
-          build_connectivity(from, to);
+      if (conn_set.count(entry))
+        _build_connectivity(from, to);
     }
   }
 }
@@ -1054,8 +1051,10 @@ void mesh_unstruct_block_t::build_connectivity()
 /// \see Logg, "Efficient representation of computational meshes",
 ///      Int J. Computational Science and Engineering, Vol 4, No 4, 2009.
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_unstruct_block_t::build_connectivity(int_t from, int_t to) 
+void mesh_unstruct_block_t::_build_connectivity(int_t from, int_t to) 
 {
+  if (connectivity_.count({from, to})) return;
+
   // Make sure entities->vertices constructed constructed
   if (from>0) {
     auto & from_to_verts = connectivity_[{from, 0}];
@@ -1073,15 +1072,15 @@ void mesh_unstruct_block_t::build_connectivity(int_t from, int_t to)
 
   // if from is less than to, flip
   if (from < to) {
-    build_connectivity(to, from);
+    _build_connectivity(to, from);
     transpose(from, to);
   }
 
   // otherwise compute connectivity
   else {
     int_t through = (from==0 && to==0) ? num_dims_ : 0;
-    build_connectivity(from, through);
-    build_connectivity(through, to);
+    _build_connectivity(from, through);
+    _build_connectivity(through, to);
     intersect(from, to, through);
   }
 
@@ -1102,7 +1101,7 @@ void mesh_unstruct_block_t::transpose(int_t from, int_t to)
 void mesh_unstruct_block_t::build(int_t dim) 
 {
   if (dim<=0 || dim>=num_dims_) return;
-
+  
   auto & ents2vertices = connectivity_[{dim,0}];
   auto & cells2ents = connectivity_[{num_dims_, dim}];
   auto & cell2vertices = connectivity_.at({num_dims_, 0});
@@ -1140,6 +1139,8 @@ void mesh_unstruct_block_t::build(int_t dim)
         return cell_counter <= num_owned;
 
       });
+        
+  set_num_entities(dim);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1155,43 +1156,17 @@ void mesh_unstruct_block_t::intersect(int_t from, int_t to, int_t through)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// request geeometry
-////////////////////////////////////////////////////////////////////////////////
-void mesh_unstruct_block_t::request_face_geometry()
-{
-  if (num_dims_ == 1) {
-    request_connectivity(1, 0);
-    request_connectivity(0, 1);
-  }
-  else if (num_dims_ == 2) {
-    request_connectivity(1, 0);
-  }
-  else {
-    request_connectivity(2, 0);
-  }
-}
-
-void mesh_unstruct_block_t::request_cell_geometry()
-{
-  if (num_dims_ == 1) {
-    request_connectivity(1, 0);
-  }
-  else if (num_dims_ == 2) {
-    request_connectivity(2, 0);
-  }
-  else {
-    request_connectivity(2, 0);
-    request_connectivity(3, 2);
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// builld geeometry
 ////////////////////////////////////////////////////////////////////////////////
 void mesh_unstruct_block_t::_build_geometry(bool with_face_geom, bool with_cell_geom)
 {
-
+  
+  // second, build the actual geometry
   auto num_owned = num_owned_cells();
+
+  if (num_dims_>1 && with_face_geom && connectivity_.count({num_dims_-1,0})==0) {
+    THROW_ERROR("Asking for face geometry but dont have Face -> Vert connectivity");
+  }
 
   if (num_dims_ == 1) {
     const auto & cell2verts = connectivity(1, 0);

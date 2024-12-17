@@ -1,5 +1,5 @@
 
-add_executable( meshtool main.cpp driver.cpp )
+add_executable( meshtool main.cpp mesh_builder.cpp )
 target_link_libraries(meshtool asaum)
 
 set_property(TARGET meshtool PROPERTY CXX_STANDARD 14)

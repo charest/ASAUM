@@ -32,28 +32,9 @@ int_t mesh_block_t::id() const
 { return node_ ? node_->id() : -1; }
   
 ////////////////////////////////////////////////////////////////////////////////
-/// Initialize a block
-////////////////////////////////////////////////////////////////////////////////
-void mesh_block_t::initialize(
-    bool with_face_geom,
-    bool with_cell_geom,
-    std::vector<std::unique_ptr<mesh_boundary_t>> & boundaries)
-{
-  bounding_box();
-  map_ids();
-  build_connectivity();
-  build_neighbors();
-  prune_connectivity();
-  post_connectivity();
-  build_geometry(with_face_geom, with_cell_geom);
-  extract_boundaries(boundaries);
-  finalize();
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// resize block data
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_block_t::bounding_box() 
+void mesh_block_t::build_bounding_box() 
 { 
   for (int_t i=0; i<num_dims_; ++i) {
     bounding_box_.lo[i] = consts::real_max;
@@ -83,38 +64,55 @@ void mesh_block_t::queue_geometry_exchange(comm_queue_block_t & q)
 ////////////////////////////////////////////////////////////////////////////////
 /// request neighbor info
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_block_t::request_neighbors(int_t dim,  int_t through)
+void mesh_block_t::build_neighbors(const std::vector<std::pair<int_t, int_t>> & neigh)
 {
-  if (dim > num_dims_) {
-    THROW_ERROR(
-        "Neighbor info for 0 <= dim <= " << num_dims_ 
-        << ", but you are asking for " << dim);
-  }
-  if (through > num_dims_) {
-    THROW_ERROR(
-        "Neighbor info through 0 <= dim <= " << num_dims_ 
-        << ", but you are asking for neighbor info through " << dim);
-  }
-  if (through == dim) {
-    THROW_ERROR(
-        "Neighbor info through 0 <= dim <= " << num_dims_ 
-        << " cannot be found throuogh " << dim);
-  }
+  for (auto n : neigh) {
 
-  desired_neighbors_.emplace(dim, through);
+    auto dim = n.first;
+    auto through = n.second;
+    
+    if (dim > num_dims_) {
+      THROW_ERROR(
+          "Neighbor info for 0 <= dim <= " << num_dims_ 
+          << ", but you are asking for " << dim);
+    }
+    if (through > num_dims_) {
+      THROW_ERROR(
+          "Neighbor info through 0 <= dim <= " << num_dims_ 
+          << ", but you are asking for neighbor info through " << dim);
+    }
+    if (through == dim) {
+      THROW_ERROR(
+          "Neighbor info through 0 <= dim <= " << num_dims_ 
+          << " cannot be found throuogh " << dim);
+    }
+
+    desired_neighbors_.emplace(dim, through);
+  }
+  
+  _build_neighbors(neigh);
+  
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// request connecitivy
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_block_t::request_connectivity(int_t a, int_t b)
+void mesh_block_t::build_connectivity(const std::vector<std::pair<int_t, int_t>> & conn)
 {
-  if (a < 0 || a > num_dims_ || b < 0 || b > num_dims_) {
-    THROW_ERROR(
-        "Connectivity indices must be 0 <= i <= " << num_dims_ 
-        << ", but you are asking for " << a << " -> " << b);
+  for (auto c : conn) {
+
+    auto a = c.first;
+    auto b = c.second;
+  
+    if (a < 0 || a > num_dims_ || b < 0 || b > num_dims_) {
+      THROW_ERROR(
+          "Connectivity indices must be 0 <= i <= " << num_dims_ 
+          << ", but you are asking for " << a << " -> " << b);
+    }
+    desired_connectivity_.emplace(a, b); 
   }
-  desired_connectivity_.emplace(a, b); 
+
+  _build_connectivity(conn);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -188,6 +186,7 @@ const crs_t<int_t,int_t> & mesh_block_t::neighbors(int_t a, int_t b) const
 ////////////////////////////////////////////////////////////////////////////////
 void mesh_block_t::build_geometry(bool with_face_geom, bool with_cell_geom)
 {
+
   if (with_face_geom) {
     face_areas_.clear();
     face_centroids_.clear();
@@ -237,7 +236,7 @@ void mesh_block_t::output(csv_writer_t & csv)  const
 ////////////////////////////////////////////////////////////////////////////////
 /// Some general finishing touches
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_block_t::map_ids()
+void mesh_block_t::map_global_to_local_ids()
 {
   auto n = global_ids_.size();
   global_id_map_.clear();

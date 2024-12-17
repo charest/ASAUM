@@ -175,46 +175,58 @@ std::vector<int_t> mesh_t::block_ids() const
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Initialize a mesh
+/// Build the halo
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_t::initialize()
+void mesh_t::build_halo(int_t num_ghost, bool with_corners)
+{
+
+  auto is_root = comm_.is_root();
+  comm_maps_.reset();
+
+  if (num_ghost) {
+
+    if (is_root) {
+      std::cout << "msh> Expand mesh by " << num_ghost << " cells";
+      std::cout << std::endl;
+    }
+
+    std::vector<comm_map_block_t> maps;
+    _build_halo(num_ghost, with_corners, maps);
+    comm_maps_ = std::make_unique<comm_map_t>( std::move(maps) );
+    ghost_exchange();
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Build the geometric information
+////////////////////////////////////////////////////////////////////////////////
+void mesh_t::build_geometry(bool faces, bool cells)
 {
   auto is_root = comm_.is_root();
 
-  number();
-  
-  if (num_ghost_) {
-    if (is_root) {
-      std::cout << "msh> Expand mesh by " << num_ghost_ << " cells";
-      std::cout << std::endl;
-    }
-    build_halo();
-  }
-
   if (is_root) {
-    std::cout << "msh> Initializing blocks";
+    std::cout << "msh> Calculating geometric information";
     std::cout <<std::endl;
   }
   
   for (auto & b : blocks_)
-    b->initialize(with_face_geom_, with_cell_geom_, boundaries_);
-    
-  if (num_ghost_ && with_cell_geom_) exchange_geometry();
-
+    b->build_geometry(faces, cells);
 }
-
+  
 ////////////////////////////////////////////////////////////////////////////////
-/// Build the halo
+/// Extract boundary information
 ////////////////////////////////////////////////////////////////////////////////
-void mesh_t::build_halo()
+void mesh_t::build_boundaries()
 {
-  comm_maps_.reset();
-  if (num_ghost_) {
-    std::vector<comm_map_block_t> maps;
-    build_halo(maps);
-    comm_maps_ = std::make_unique<comm_map_t>( std::move(maps) );
-    ghost_exchange();
+  auto is_root = comm_.is_root();
+
+  if (is_root) {
+    std::cout << "msh> Extracting boundary information";
+    std::cout <<std::endl;
   }
+  
+  for (auto & b : blocks_)
+    b->extract_boundaries(boundaries_);
 }
   
 ////////////////////////////////////////////////////////////////////////////////
@@ -222,8 +234,6 @@ void mesh_t::build_halo()
 ////////////////////////////////////////////////////////////////////////////////
 void mesh_t::exchange_geometry()
 {
-  if (!(comm_maps_ && with_cell_geom_)) return;
-
   comm_queue_t q(comm_, *comm_maps_);
   int_t nblock = num_blocks();
 
@@ -1275,13 +1285,6 @@ bool mesh_t::amr(
 
   number();
   
-  build_halo();
-  
-  for (auto b :blocks_)
-    b->initialize(with_face_geom_, with_cell_geom_, boundaries_);
-
-  exchange_geometry();
-
   std::cout << "DID AMR!!!" << std::endl;
 
   return true;

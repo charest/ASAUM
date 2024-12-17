@@ -1,5 +1,5 @@
-#ifndef DRIVER_HPP
-#define DRIVER_HPP
+#ifndef MESH_BUILDER_HPP
+#define MESH_BUILDER_HPP
 
 #include "comm/comm_map.hpp" 
 
@@ -19,7 +19,7 @@ namespace prl {
 ////////////////////////////////////////////////////////////////////////////////
 /// Unstructured driver
 ////////////////////////////////////////////////////////////////////////////////
-struct driver_t {
+struct mesh_builder_t {
 
   lua_t input_;
 
@@ -51,7 +51,7 @@ struct driver_t {
   std::unique_ptr<vtk_writer_t> vtk_;
 
   /// constructor
-  driver_t(
+  mesh_builder_t(
       lua_t input,
       mpi_comm_t & comm);
   
@@ -76,7 +76,7 @@ struct driver_t {
   
   void create_directory(const std::string & dirname);
 
-  void run();
+  void build();
 
 };
 

@@ -38,7 +38,7 @@ public:
   
   bool is_structured() const override { return false; }
   
-  void load() override;
+  void read_and_partition();
 
   void read(
     mpi_comm_t & comm,
@@ -51,7 +51,10 @@ public:
   void post_migration(mpi_comm_t & comm);
 
   void number() override;
-  void build_halo(std::vector<comm_map_block_t> & comm_maps) override;
+  void _build_halo(
+      int_t num_ghost,
+      bool with_corners,
+      std::vector<comm_map_block_t> & comm_maps) override;
 
   void output(exo_writer_t & exo, int_t blk, const std::string & lbl) override
   { blocks_[blk]->output(exo, lbl, side_sets_); }

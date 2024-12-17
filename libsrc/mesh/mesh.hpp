@@ -39,8 +39,6 @@ protected:
   
   int_t num_dims_ = 0;
 
-  int_t num_ghost_ = 0;
-  
   int_t max_refinement_level_ = 5;
   
   std::vector<int_t> partitioning_;
@@ -51,10 +49,6 @@ protected:
   
   std::vector<std::unique_ptr<mesh_node_t>> roots_;
   std::vector<mesh_block_t*> blocks_;
-
-  bool with_corners_ = false;
-  bool with_face_geom_ = false;
-  bool with_cell_geom_ = false;
 
   std::vector<std::unique_ptr<mesh_boundary_t>> boundaries_;
   std::map<std::string, int_t> boundary_map_;
@@ -75,8 +69,6 @@ public:
       const std::vector<int_t> & parts);
 
   virtual bool is_structured() const = 0;
-  
-  int_t num_ghost() const { return num_ghost_; }
   
   int_t num_dims() const { return num_dims_; }
   
@@ -130,42 +122,8 @@ public:
   }
 
   auto comm_map() { return comm_maps_.get(); }
-
-  void request_ghost(int_t num_ghost)
-  {
-    if (num_ghost < 0) {
-      THROW_ERROR(
-          "Number of ghost layers must be greater than or equal to 0,"
-          << " but you are asking for " << num_ghost );
-    }
-    num_ghost_ = std::max(num_ghost_, num_ghost);
-  }
   
-  void request_connectivity(int_t from, int_t to)
-  { for (auto & b : blocks_) b->request_connectivity(from, to); }
-
-  void request_corners()
-  { with_corners_ = true;  }
-  
-  void request_cell_geometry()
-  {
-    with_cell_geom_ = true;
-    for (auto & b : blocks_)
-      b->request_cell_geometry();
-  }
-
-  void request_face_geometry()
-  {
-    with_face_geom_ = true;
-    for (auto & b : blocks_)
-      b->request_face_geometry();
-  }
-
-  void max_refinement_level(int_t i) { max_refinement_level_ = i; }
-
-  virtual void load() = 0;
-
-  void initialize();
+  void set_max_refinement_level(int_t i) { max_refinement_level_ = i; }
 
   mesh_node_t * root(int_t i) { return roots_[i].get(); }
   void reserve_roots(size_t n)
@@ -179,11 +137,20 @@ public:
   void add_root(std::unique_ptr<mesh_node_t> node)
   { roots_.emplace_back( std::move(node) ); }
 
+  void build_geometry(bool faces, bool cells);
   void exchange_geometry();
   
-  void build_halo();
+  void build_halo(int_t num_ghost=1, bool with_corners=false);
+  virtual void _build_halo(
+      int_t num_ghost,
+      bool with_corners,
+      std::vector<comm_map_block_t> & comm_maps) = 0;
 
-  virtual void build_halo(std::vector<comm_map_block_t> & comm_maps) = 0;
+  void build_boundaries();
+
+  void prune_connectivity()
+  { for (const auto & b : blocks_) b->prune_connectivity(); }
+
   virtual void number() = 0;
   
 #ifdef HAVE_EXODUS

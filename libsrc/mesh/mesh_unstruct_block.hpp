@@ -71,18 +71,13 @@ public:
   void build(int_t dim);
   void intersect(int_t from, int_t to, int_t through);
   
-  void build_connectivity(int_t a, int_t b) override;
-  void build_connectivity() override;
+  void _build_connectivity(int_t a, int_t b) override;
+  void _build_connectivity(const std::vector<std::pair<int_t,int_t>> & conn) override;
   
-  void build_neighbors() override;
-  void build_neighbors(int_t dim, int_t thru) override;
-  
-  void post_connectivity() override;
-  
+  void _build_neighbors(const std::vector<std::pair<int_t,int_t>> & neigh) override;
+  void _build_neighbors(int_t dim, int_t thru) override;
+
   void _build_geometry(bool with_face_geom, bool with_cell_geom) override;
-  
-  void request_face_geometry() override;
-  void request_cell_geometry() override;
   
   using mesh_block_t::output;
 

@@ -23,10 +23,13 @@ public:
   
   bool is_structured() const override { return true; }
 
-  void load() override;
+  void build_and_partition();
 
   void number() override;
-  void build_halo(std::vector<comm_map_block_t> & comm_maps) override;
+  void _build_halo(
+      int_t num_ghost,
+      bool with_corners,
+      std::vector<comm_map_block_t> & comm_maps) override;
 
   void number_vertices();
 

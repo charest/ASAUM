@@ -105,16 +105,13 @@ public:
   const auto & dims() const { return dims_; }
   auto dim(int_t i) const { return dims_[i]; }
   
-  void build_connectivity() override;
-  void build_connectivity(int_t a, int_t b) override;
+  void _build_connectivity(const std::vector<std::pair<int_t, int_t>> & conn) override;
+  void _build_connectivity(int_t a, int_t b) override;
   
-  void build_neighbors() override;
-  void build_neighbors(int_t dim, int_t thru) override;
+  void _build_neighbors(const std::vector<std::pair<int_t, int_t>> & conn) override;
+  void _build_neighbors(int_t dim, int_t thru) override;
   
   void _build_geometry(bool with_face_geom, bool with_cell_geom) override;
-
-  void request_face_geometry() override {}
-  void request_cell_geometry() override {}
 
   using mesh_block_t::output;
 #ifdef HAVE_EXODUS

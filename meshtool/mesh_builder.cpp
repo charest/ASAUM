@@ -1,6 +1,5 @@
-#include "driver.hpp"
+#include "mesh_builder.hpp"
 
-#include "common/time_step.hpp"
 #include "io/file_utils.hpp"
 #include "io/outvar.hpp"
 #include "mesh/amr_flags.hpp"
@@ -39,7 +38,7 @@ static option_t<std::vector<int_t>> RefineOption(
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor
 ////////////////////////////////////////////////////////////////////////////////
-driver_t::driver_t(
+mesh_builder_t::mesh_builder_t(
     lua_t input,
     mpi_comm_t & comm) :
   input_(input), refine_(RefineOption), comm_(comm)
@@ -149,41 +148,93 @@ driver_t::driver_t(
 ////////////////////////////////////////////////////////////////////////////////
 /// man driver unction
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::run() {
+void mesh_builder_t::build() {
   MARK_FUNCTION();
   
   auto is_root = comm_.is_root();
 
-  MARK_REGION_BEGIN("Initialize");
-  
-  // load the mesh
-  mesh_->load();
-  
   // initial uniform refinement
   if (refine_.size()) {
-    if (is_root) {
-      std::cout << "drv> Performing initial refinement: ";
+    if (is_root) { 
+      std::cout << "drv> Performing initial UNIFORM refinement: ";
       for (auto r : refine_) std::cout << r << " ";
       std::cout << std::endl;
     }
     mesh_->initial_refinement(refine_);
   }
 
-  // Initial conditions
+  // initialize the mesh
   initialize();
-  
-  MARK_REGION_END("Initialize");
+
+  // amr
+  mesh_->set_max_refinement_level(amr_levels_);
+  if (initial_amr_>0) initial_amr();
   
   // output
   output();
 
 }
   
+////////////////////////////////////////////////////////////////////////////////
+/// initialize the mesh
+////////////////////////////////////////////////////////////////////////////////
+void mesh_builder_t::initialize()
+{
+  MARK_FUNCTION();
+  
+  auto is_root = comm_.is_root();
+  
+  // create the requested data structures/connectivity/halo
+  mesh_->build_halo();
+  
+  //-----------------------------------
+  // build the mesh connectivity information
+  auto num_dims = mesh_->num_dims();
+  
+  for (int_t i=0; i<mesh_->num_blocks(); ++i) {
+    const auto mesh_block = mesh_->block(i);
+    std::vector<std::pair<int_t, int_t>> conn;
+      
+    // cell to face
+    conn.emplace_back(num_dims-1, num_dims);
+    conn.emplace_back(num_dims, num_dims-1);
+    
+    // cell to vertex
+    if (mesh_block->is_structured()) {
+      conn.emplace_back(0, num_dims);
+      conn.emplace_back(num_dims, 0);
+    }
+    // need face->vert for unstructured face geometry
+    else if (num_dims>1) {
+      conn.emplace_back(num_dims-1, 0);
+      conn.emplace_back(num_dims, 0);
+    }
+  
+    mesh_block->build_connectivity(conn);
+
+    // build cell->cell neighbors through faces
+    mesh_block->build_neighbors({std::make_pair(num_dims,num_dims-1)});
+
+  } // blocks
+  //-----------------------------------
+
+  // prune any connectivity generated that wasnt requested
+  mesh_->prune_connectivity();
+
+  // compute geometric information
+  mesh_->build_geometry(true, true);
+  mesh_->exchange_geometry(); // for cell data
+
+  // extract boundary information
+  mesh_->build_boundaries();
+
+}
+
   
 ////////////////////////////////////////////////////////////////////////////////
 /// make a directory
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::create_directory(const std::string & dirname)
+void mesh_builder_t::create_directory(const std::string & dirname)
 {
   if (comm_.is_root()) {
     auto res = make_dir(dirname.c_str());
@@ -199,61 +250,9 @@ void driver_t::create_directory(const std::string & dirname)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// initialize the solution
-////////////////////////////////////////////////////////////////////////////////
-void driver_t::initialize() {
-
-  auto is_root = comm_.is_root();
-  
-  int num_ghost=1;
-  
-  mesh_->request_ghost( num_ghost );
-  // configure the mesh for connectivity information / ghost cells
-  mesh_->request_face_geometry();
-  mesh_->request_cell_geometry();
-  
-  auto num_dims = mesh_->num_dims();
-  
-  for (int_t i=0; i<mesh_->num_blocks(); ++i) {
-    const auto mesh_block = mesh_->block(i);
-    
-    // structured
-    if (mesh_block->is_structured()) {
-      mesh_block->request_connectivity(num_dims-1, num_dims);
-      mesh_block->request_connectivity(num_dims, num_dims-1);
-      // cell to vertex
-      mesh_block->request_connectivity(0, num_dims);
-      mesh_block->request_connectivity(num_dims, 0);
-    }
-    // unstructured
-    else {
-      mesh_block->request_connectivity(num_dims-1, num_dims);
-      mesh_block->request_connectivity(num_dims, num_dims-1);
-    }
-
-  } // blocks
-
-  
-  
-  // create the requested data structures/connectivity/halo
-  mesh_->initialize();
-
-  // initialize the shared data
-  int_t num_blocks = mesh_->num_blocks();
-
-  // now initialize the solution
-  if (is_root) std::cout << "drv> Initializing solution." << std::endl;
-
-  // amr
-  mesh_->max_refinement_level(amr_levels_);
-  if (initial_amr_>0) initial_amr();
-  
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// output the solution
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::output()
+void mesh_builder_t::output()
 {
   auto is_root = comm_.is_root();
 
@@ -496,7 +495,7 @@ void driver_t::output()
 ////////////////////////////////////////////////////////////////////////////////
 /// Perform amr
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::amr()
+void mesh_builder_t::amr()
 {
   
   auto is_root = comm_.is_root();
@@ -517,18 +516,12 @@ void driver_t::amr()
       { coarsen(flags, parent, children, n); }
   );
 
-  // new number of blocks
-  if (did_amr) {
-    num_blocks = mesh_->num_blocks();
-    //hydro_->post_amr(*time_scheme_);
-  }
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Perform amr
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::initial_amr()
+void mesh_builder_t::initial_amr()
 {
   for (int_t i=0; i<initial_amr_; ++i)
     amr();
@@ -537,7 +530,7 @@ void driver_t::initial_amr()
 ////////////////////////////////////////////////////////////////////////////////
 /// Perform refinement
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::refine(
+void mesh_builder_t::refine(
     const amr_flags_t & flags,
     mesh_block_t * parent,
     mesh_block_t ** children,
@@ -553,7 +546,7 @@ void driver_t::refine(
 ////////////////////////////////////////////////////////////////////////////////
 /// Perform Coarsening
 ////////////////////////////////////////////////////////////////////////////////
-void driver_t::coarsen(
+void mesh_builder_t::coarsen(
     const amr_flags_t & flags,
     mesh_block_t * parent,
     mesh_block_t ** children,

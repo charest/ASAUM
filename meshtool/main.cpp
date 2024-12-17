@@ -1,4 +1,4 @@
-#include "driver.hpp"
+#include "mesh_builder.hpp"
 
 #include "comm/mpi_comm.hpp"
 #include "comm/comm_queue.hpp"
@@ -110,8 +110,8 @@ int main(int argc, char ** argv) {
 #endif
   
   // run the example
-  driver_t drv(inputs, comm);
-  drv.run();
+  mesh_builder_t builder(inputs, comm);
+  builder.build();
   
   if (PrintTrace || TraceFile)
     DUMP_TRACE(comm, static_cast<bool>(PrintTrace), TraceFile);
