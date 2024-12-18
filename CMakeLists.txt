@@ -99,9 +99,9 @@ option(ENABLE_TRACE "Enable tracing" off)
 
 add_subdirectory(libsrc)
 add_subdirectory(meshtool)
-#if (HAVE_EXODUS)
-#  add_subdirectory(exogen)
-#endif()
+if (HAVE_EXODUS)
+  add_subdirectory(exogen)
+endif()
 
 #------------------------------------------------------------------------------#
 # Add testing
