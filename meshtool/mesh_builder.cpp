@@ -281,116 +281,34 @@ void mesh_builder_t::output()
   // VTK
   //----------------------------------------------------------------------------
   if (vtk_) {
-    std::stringstream ss;
 
+    std::stringstream ss;
+    
     ss << "vtkfiles";
     create_directory(ss.str());
     auto rootdir = ss.str();
-
+    
     ss << "/" << iter_str;
-    auto dirname = ss.str();
+    create_directory(ss.str());
     
-    std::vector<char> postfixes;
-    postfixes.reserve(num_blocks);
+    ss << "/" << output_prefix_;
 
-    create_directory(dirname);
-    //----------------------------------
-    // write blocks
-    for (int_t b=0; b<num_blocks; ++b) {
-      
-      reset(ss);
+    mesh_->output(
+      vtk_.get(),
+      ss.str(),
+      output_counter_,
+      solution_time_);
+
+    std::stringstream vtm_ss, vtk_ss;
+    vtm_ss << rootdir << "/" << output_prefix_;
+    vtk_ss << iter_str << "/" << output_prefix_;
     
-      const auto mesh_block = mesh_->block(b);
-      auto bid = mesh_block->id();
-      auto block_str = zero_padded(bid, bdigits);
-      
-      auto is_structured = mesh_block->is_structured();
-      std::string postfix = is_structured ? ".vts" : ".vtu";
-      postfixes.emplace_back( postfix.back() );
-
-      ss << dirname << "/" << output_prefix_ << "." << block_str << postfix;
-      
-      vtk_->open(ss.str().c_str());
-
-      if (is_structured) {
-        auto struct_block = dynamic_cast<mesh_struct_block_t*>(mesh_block);
-        auto dims = struct_block->dims();
-        vtk_->start_structured(dims);
-        vtk_->start_piece(dims);      
-      }
-      else {
-        vtk_->start_unstructured();
-        vtk_->start_piece(mesh_block->num_owned_cells(), mesh_block->num_owned_vertices());
-      }
-
-      mesh_block->output(*vtk_);
-      vtk_->start_cell_data();
-      //hydro_->block(b)->output(*vtk_);
-      vtk_->end_cell_data();
-      vtk_->start_point_data();
-      vtk_->end_point_data();
-      vtk_->end_piece();
-      
-      vtk_->start_field_data();
-      vtk_->write_data_array( solution_time_, "TimeValue");
-      vtk_->write_data_array( output_counter_, "TimeStep");
-      
-
-      vtk_->end_field_data();
-
-      if (mesh_block->is_structured())
-        vtk_->end_structured();
-      else
-        vtk_->end_unstructured();
-      
-      vtk_->close();
-    }
-    
-    //----------------------------------
-    // write multiblock dataset
-    if (is_root) {
-      reset(ss);
-      ss << rootdir << "/" << output_prefix_ << "." << iter_str << ".vtm";
-      auto filename = ss.str();
-
-      reset(ss);
-      ss << iter_str << "/" << output_prefix_ << ".";
-      auto prefix = ss.str();
-
-      const auto & block_offsets = mesh_->block_offsets();
-      const auto & block_counts = mesh_->block_counts();
-      auto tot_blocks = mesh_->tot_blocks();
-
-      std::vector<int> recvdispls(block_offsets.begin(), block_offsets.end());
-      std::vector<int> recvcounts(block_counts.begin(), block_counts.end());
-
-      std::vector<char> gathered_postfixes(tot_blocks);
-      comm_.gatherv(postfixes, gathered_postfixes, recvcounts, recvdispls, 0);
-      
-      std::vector<std::string> suffixes;
-      suffixes.reserve(tot_blocks);
-      for (auto c : gathered_postfixes)
-        suffixes.emplace_back(".vt" + std::string(1,c));
-
-      auto res = vtk_->write_multiblock(
-          filename.c_str(),
-          prefix.c_str(),
-          suffixes,
-          bdigits,
-          block_offsets,
-          "TimeValue", solution_time_,
-          "TimeStep", output_counter_);
-      if (res) {
-        std::cout << "Error writing to '" << ss.str() << "'." << std::endl;
-        comm_.exit(consts::failure);
-      }
-    }
-    //----------------------------------
-    // Non-root still needs to send info
-    else {
-      comm_.gatherv(postfixes, 0);
-    }
-
+    mesh_->output_multiblock(
+      vtk_.get(),
+      vtm_ss.str(),
+      vtk_ss.str(),
+      output_counter_,
+      solution_time_);
 
   } // vtk
   
@@ -403,39 +321,12 @@ void mesh_builder_t::output()
 
     ss << "csvfiles";
     create_directory(ss.str());
-
-    ss << "/" << iter_str;
-    auto dirname = ss.str();
     
-    create_directory(dirname);
+    ss << "/" << iter_str;
+    create_directory(ss.str());
 
-    // write blocks
-    for (int_t b=0; b<num_blocks; ++b) {
-      
-      reset(ss);
-
-      const auto mesh_block = mesh_->block(b);
-      auto bid = mesh_block->id();
-      auto block_str = zero_padded(bid, bdigits);
-  
-      // mesh
-      ss << dirname << "/" << output_prefix_ << ".mesh.csv." << block_str;
-      csv_->open(ss.str().c_str());
-      csv_->comment(title.str().c_str());
-      mesh_block->output(*csv_);
-      csv_->close();
-
-#if 0
-      // hydro
-      reset(ss);
-      ss << dirname << "/" << output_prefix_ << ".hydro.csv." << block_str;
-      csv_->open(ss.str().c_str());
-      csv_->comment(title.str().c_str());
-      //hydro_->block(b)->output(*csv_);
-      csv_->close();
-#endif
-
-    }
+    ss << "/" << output_prefix_ << ".mesh";
+    mesh_->output(csv_.get(), ss.str(), title.str());
 
   } // csv
   
@@ -446,42 +337,17 @@ void mesh_builder_t::output()
   if (exo_) {
 
     std::stringstream ss;
-
     ss << "exofiles";
     create_directory(ss.str());
-    auto dirname = ss.str();
 
-    // write blocks
-    for (int_t b=0; b<num_blocks; ++b) {
-      
-      reset(ss);
-
-      const auto mesh_block = mesh_->block(b);
-      auto bid = mesh_block->id();
-      auto block_str = zero_padded(bid, bdigits);
-  
-      // mesh
-      ss << dirname << "/" << output_prefix_ << ".e-s." << iter_str << ".";
-      ss << block_size_str << "." << block_str;
-      exo_->open(ss.str());
-
-      mesh_->output(*exo_, b, title.str());
-
-      // first collect field info
-      std::vector<outvar_t> vars;
-      //hydro_->block(b)->output_variables(vars);
-
-      // write the vars
-      if (vars.size()) exo_->write_field_names(vars);
-      
-      // now write the fields
-      //hydro_->block(b)->output(*exo_);
-      
-      // can only write time data if there are fields
-      if (vars.size()) exo_->write_time(1, solution_time_);
-
-      exo_->close();
-    }
+    ss << "/" << output_prefix_;
+    
+    mesh_->output(
+      exo_.get(),
+      ss.str(),
+      title.str(),
+      output_counter_,
+      solution_time_);
 
   } // exo
 #endif

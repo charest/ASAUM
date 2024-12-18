@@ -13,6 +13,12 @@
 #include "comm/comm_map.hpp"
 #include "comm/comm_queue.hpp"
 #include "comm/comm_utils.hpp"
+#include "io/csv_writer.hpp"
+#ifdef HAVE_EXODUS
+#include "io/exo_writer.hpp"
+#include "io/outvar.hpp"
+#endif
+#include "io/vtk_writer.hpp"
 #include "lua/lua_utils.hpp"
 #include "utils/arguments.hpp"
 #include "utils/cast.hpp"
@@ -443,6 +449,244 @@ bool mesh_t::find_cell(long_t gid, int_t & block_id, int_t & cell_id)
 
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Output in csv
+////////////////////////////////////////////////////////////////////////////////
+void mesh_t::output(
+  csv_writer_t * csv,
+  const std::string & output_prefix,
+  const std::string & title) const
+{
+    
+  auto nblock = num_blocks();
+  auto bdigits = num_digits(tot_blocks());
+  
+  // write blocks
+  for (int_t b=0; b<nblock; ++b) {
+    const auto mesh_block = block(b);
+
+    std::stringstream ss;
+
+    auto bid = mesh_block->id();
+    auto block_str = zero_padded(bid, bdigits);
+  
+    // mesh
+    ss << output_prefix << ".csv." << block_str;
+    csv->open(ss.str().c_str());
+    if (title.size()) csv->comment(title.c_str());
+    mesh_block->output(*csv);
+    csv->close();
+
+#if 0
+    // hydro
+    reset(ss);
+    ss << dirname << "/" << output_prefix_ << ".hydro.csv." << block_str;
+    csv_->open(ss.str().c_str());
+    csv_->comment(title.str().c_str());
+    //hydro_->block(b)->output(*csv_);
+    csv_->close();
+#endif
+
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Output in vtk
+////////////////////////////////////////////////////////////////////////////////
+void mesh_t::output(
+  vtk_writer_t * vtk,
+  const std::string & output_prefix,
+  int output_counter,
+  double solution_time) const
+{
+
+  auto bdigits = num_digits(tot_blocks());
+  auto nblock = num_blocks();
+    
+  std::vector<char> postfixes;
+  postfixes.reserve(nblock);
+
+  //----------------------------------
+  // write blocks
+  for (int_t b=0; b<nblock; ++b) {
+    
+    std::stringstream ss;
+
+    const auto mesh_block = block(b);
+    auto bid = mesh_block->id();
+    auto block_str = zero_padded(bid, bdigits);
+    
+    auto is_structured = mesh_block->is_structured();
+    std::string postfix = is_structured ? ".vts" : ".vtu";
+    postfixes.emplace_back( postfix.back() );
+
+    ss << output_prefix << "." << block_str << postfix;
+    
+    vtk->open(ss.str().c_str());
+
+    if (is_structured) {
+      auto struct_block = dynamic_cast<const mesh_struct_block_t*>(mesh_block);
+      auto dims = struct_block->dims();
+      vtk->start_structured(dims);
+      vtk->start_piece(dims);      
+    }
+    else {
+      vtk->start_unstructured();
+      vtk->start_piece(mesh_block->num_owned_cells(), mesh_block->num_owned_vertices());
+    }
+
+    mesh_block->output(*vtk);
+    vtk->start_cell_data();
+    //hydro_->block(b)->output(*vtk_);
+    vtk->end_cell_data();
+    vtk->start_point_data();
+    vtk->end_point_data();
+    vtk->end_piece();
+    
+    vtk->start_field_data();
+    vtk->write_data_array( solution_time, "TimeValue");
+    vtk->write_data_array( output_counter, "TimeStep");
+
+    vtk->end_field_data();
+
+    if (mesh_block->is_structured())
+      vtk->end_structured();
+    else
+      vtk->end_unstructured();
+    
+    vtk->close();
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Output in vtk multiblock format
+////////////////////////////////////////////////////////////////////////////////
+void mesh_t::output_multiblock(
+  vtk_writer_t * vtk,
+  const std::string & output_prefix,
+  const std::string & block_prefix,
+  int output_counter,
+  double solution_time) const
+{
+
+  auto is_root = comm_.is_root();
+  auto bdigits = num_digits(tot_blocks());
+  auto nblock = num_blocks();
+  auto iter_str = zero_padded(output_counter);
+  
+  std::vector<char> postfixes;
+  postfixes.reserve(nblock);
+
+  for (const auto & b : blocks_) {
+    auto is_structured = b->is_structured();
+    char postfix = is_structured ? 's' : 'u';
+    postfixes.emplace_back( postfix );
+  }
+
+ 
+  //----------------------------------
+  // write multiblock dataset
+  if (is_root) {
+    std::stringstream vtm_ss;
+    vtm_ss << output_prefix  << "." << iter_str << ".vtm";
+    auto filename = vtm_ss.str();
+
+    std::stringstream vtb_ss;
+    vtb_ss << block_prefix << ".";
+    auto prefix = vtb_ss.str();
+
+    const auto & offsets = block_offsets();
+    const auto & counts = block_counts();
+    auto tblock = tot_blocks();
+
+    std::vector<int> recvdispls(offsets.begin(), offsets.end());
+    std::vector<int> recvcounts(counts.begin(), counts.end());
+
+    std::vector<char> gathered_postfixes(tblock);
+    comm_.gatherv(postfixes, gathered_postfixes, recvcounts, recvdispls, 0);
+    
+    std::vector<std::string> suffixes;
+    suffixes.reserve(tblock);
+    for (auto c : gathered_postfixes)
+      suffixes.emplace_back(".vt" + std::string(1,c));
+
+    auto res = vtk->write_multiblock(
+        filename.c_str(),
+        prefix.c_str(),
+        suffixes,
+        bdigits,
+        offsets,
+        "TimeValue", solution_time,
+        "TimeStep", output_counter);
+    if (res) {
+      std::cout << "Error writing to '" << vtm_ss.str() << "'." << std::endl;
+      comm_.exit(consts::failure);
+    }
+  }
+  //----------------------------------
+  // Non-root still needs to send info
+  else {
+    comm_.gatherv(postfixes, 0);
+  }
+
+}
+
+
+
+#ifdef HAVE_EXODUS
+
+////////////////////////////////////////////////////////////////////////////////
+/// Output in exodus
+////////////////////////////////////////////////////////////////////////////////
+void mesh_t::output(
+  exo_writer_t * exo,
+  const std::string & output_prefix,
+  const std::string & title,
+  int output_counter,
+  double solution_time) const
+{
+  auto nblock = num_blocks();
+  auto tblock = tot_blocks();
+
+  auto iter_str = zero_padded(output_counter);
+  
+  auto bdigits = num_digits(tblock);
+  auto block_size_str = zero_padded(tblock, bdigits);
+  
+  // write blocks
+  for (int_t b=0; b<nblock; ++b) {
+    
+    std::stringstream ss;
+
+    const auto mesh_block = block(b);
+    auto bid = mesh_block->id();
+    auto block_str = zero_padded(bid, bdigits);
+  
+    // mesh
+    ss << output_prefix << ".e-s." << iter_str << ".";
+    ss << block_size_str << "." << block_str;
+    exo->open(ss.str());
+
+    output(*exo, b, title); 
+
+    // first collect field info
+    std::vector<outvar_t> vars;
+    //hydro_->block(b)->output_variables(vars);
+
+    // write the vars
+    if (vars.size()) exo->write_field_names(vars);
+    
+    // now write the fields
+    //hydro_->block(b)->output(*exo);
+    
+    // can only write time data if there are fields
+    if (vars.size()) exo->write_time(1, solution_time);
+
+    exo->close();
+  }
+}
+
+#endif // HAVE_EXODUS
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Splice connectivity

@@ -152,10 +152,34 @@ public:
   { for (const auto & b : blocks_) b->prune_connectivity(); }
 
   virtual void number() = 0;
+
+  void output(
+    csv_writer_t* csv,
+    const std::string & output_prefix,
+    const std::string & title = "") const;
+
+  void output(
+    vtk_writer_t * vtk,
+    const std::string & output_prefix,
+    int output_counter = 0,
+    double solution_time = 0) const;
+  void output_multiblock(
+    vtk_writer_t * vtk,
+    const std::string & multiblock_prefix,
+    const std::string & block_prefix,
+    int output_counter = 0,
+    double solution_time = 0) const;
   
 #ifdef HAVE_EXODUS
-  virtual void output(exo_writer_t & exo, int_t blk, const std::string & lbl)
+  virtual void output(exo_writer_t & exo, int_t blk, const std::string & lbl) const
   { blocks_[blk]->output(exo, lbl); }
+
+  void output(
+    exo_writer_t* exo,
+    const std::string & output_prefix,
+    const std::string & title = "",
+    int output_counter = 0,
+    double solution_time = 0) const;
 #endif
 
   /// Find which cell a position is located in

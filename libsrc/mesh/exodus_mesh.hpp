@@ -56,7 +56,7 @@ public:
       bool with_corners,
       std::vector<comm_map_block_t> & comm_maps) override;
 
-  void output(exo_writer_t & exo, int_t blk, const std::string & lbl) override
+  void output(exo_writer_t & exo, int_t blk, const std::string & lbl) const override
   { blocks_[blk]->output(exo, lbl, side_sets_); }
 
   void migrate(
