@@ -72,11 +72,18 @@ void exodus_mesh_t::read_and_partition()
     
   // figure how many initial partitions we will have
   auto ext = file_extension(filename_);
-  
+
   //--- Multiple files
   if (is_signed_integer(ext)) {
     serial = false;
     tot_parts = std::stoi(ext);
+  
+    if (tot_parts<1) {
+      std::cout << "Error processing group of exodus files '" << filename_;
+      std::cout << "', looks like there are no files in the group: ";
+      std::cout << "'" << ext << "'" << std::endl;
+      comm_.exit(consts::failure);
+    }
   
     // distribute the initial partitions among processors
     if (distribution_ == distribution_t::sequential) {
